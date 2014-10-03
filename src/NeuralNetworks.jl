@@ -38,15 +38,14 @@ function NNet(layersizes::Vector{Int}, activations=[Sigmoid()]::Vector, λ=0.0, 
     output = input
     for (nnodes, act) in zip(layersizes[2:end-1], activations[1:end-1])
         temp = output
-        output = HiddenLayer{T}(nnodes)
-        con = Connection{T}(act, λ)
-        connect!(temp, con, output)
+        output = HiddenLayer{T}(nnodes, act, λ)
+        connect!(temp, output)
     end
     temp = output
-    output = OutputLayer{T}(layersizes[end])
-    connect!(temp, Connection{T}(lastactivation, λ), output)
+    output = OutputLayer{T}(layersizes[end], lastactivation, λ)
+    connect!(temp, output)
 
-    NNet{T}(input, output, convert(T, λ))
+    NNet{T}(input, output, λ)
 end
 
 @doc """performs forward pass on input x""" ->
@@ -62,9 +61,8 @@ end
 
 @doc """performs a step in the forward pass between the given input and output layers""" ->
 function forward(input::Layer, output::Layer)
-    con = connection(input, output)
-    A_mul_B!(output.a, con.Θ, input.a)
-    vbroadcast1!(Add(), output.a, con.Θ₀, 1)
+    A_mul_B!(output.a, output.Θ, input.a)
+    vbroadcast1!(Add(), output.a, output.Θ₀, 1)
     #@error() #need to broadcast here add1!(output.a, con.Θ₀)
     activate!(output)
 end
@@ -78,14 +76,13 @@ function backward{T}(net::NNet{T}, y::DenseMatrix{T})
     map!(Subtract(), net.output.δ, net.output.a, y)
     for (output, input) in layerpairs(reverse(net))
         # backward(input, output)
-        con = connection(output, input)
         n = size(output.δ, 2)
-        mean!(con.Δ₀, output.δ, 2)
-        copy!(con.Δ, con.Θ)
-        BLAS.gemm!('N', 'T', one(T)/n, output.δ, input.a, con.λ, con.Δ)
+        mean!(output.Δ₀, output.δ, 2)
+        copy!(output.Δ, output.Θ)
+        BLAS.gemm!('N', 'T', one(T)/n, output.δ, input.a, output.λ, output.Δ)
         if !isinput(input)
-            At_mul_B!(input.δ, con.Θ, output.δ)
-            calcderiv(input.input.activation, input.δ, input.a)
+            At_mul_B!(input.δ, output.Θ, output.δ)
+            calcderiv(input.activation, input.δ, input.a)
         end
     end
 end
@@ -115,13 +112,13 @@ end
 function cost{T}(net::NNet{T}, Θ::Vector{T}, x::DenseMatrix{T}, y::DenseMatrix{T}, penalty=true)
     setΘ!(net, Θ)
     forward(net, x)
-    lastactivation = net.output.input.activation
+    lastactivation = net.output.activation
     c = sumcost(lastactivation, net.output.a, y)/size(y,2)
 
     if penalty
         pen = 0.0
-        for con in connections(net)
-            pen += con.λ * sumsq(con.Θ) / 2
+        for layer in drop(net, 1)
+            pen += layer.λ * sumsq(layer.Θ) / 2
         end
         c += pen
     end

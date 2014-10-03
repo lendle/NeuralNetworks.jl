@@ -15,35 +15,30 @@ abstract ActivationFun
 abstract Optimizer
 
 
-abstract Part{T<:FloatingPoint}
+#abstract Part{T<:FloatingPoint}
 
 @doc """A Layer represents the nodes in the network
 and holds storage for the forward and backwards passes""" ->
-abstract Layer{T} <: Part{T}
+abstract Layer{T <: FloatingPoint} #<: Part{T}
 
-@doc """A Connection defines the activation function between two Layers
-and holds views to the weights and gradients.
-""" ->
-type Connection{T} <: Part{T}
-    input::Layer
-    output::Layer
-    activation::ActivationFun
-    Θ₀::DenseMatrix{T} #weights for bias term
-    Θ::DenseMatrix{T} #weights
-    Δ₀::DenseMatrix{T} #grad (after a backward pass) for bias term
-    Δ::DenseMatrix{T} #grads
-    λ::T
-    function Connection(activation::ActivationFun, λ::T)
-        con=new()
-        con.activation=activation
-        con.λ = λ
-        con
-    end
-end
+# @doc """A Connection defines the activation function between two Layers
+# and holds views to the weights and gradients.
+# """ ->
+# type Connection{T} <: Part{T}
+#     input::Layer
+#     output::Layer
+
+#     function Connection(activation::ActivationFun, λ::T)
+#         con=new()
+#         con.activation=activation
+#         con.λ = λ
+#         con
+#     end
+# end
 
 type InputLayer{T} <: Layer{T}
     nnodes::Int
-    output::Connection{T}
+    output::Layer{T}
     a::Matrix{T}
     function InputLayer(nnodes)
         layer=new()
@@ -54,25 +49,41 @@ end
 
 type OutputLayer{T} <: Layer{T}
     nnodes::Int
-    input::Connection{T}
+    input::Layer{T}
     a::Matrix{T}
     δ::Matrix{T}
-    function OutputLayer(nnodes)
+    activation::ActivationFun
+    Θ₀::DenseMatrix{T} #weights for bias term
+    Θ::DenseMatrix{T} #weights
+    Δ₀::DenseMatrix{T} #grad (after a backward pass) for bias term
+    Δ::DenseMatrix{T} #grads
+    λ::T
+    function OutputLayer(nnodes, activation::ActivationFun, λ::T)
         layer=new()
-        layer.nnodes=nnodes
+        layer.nnodes = nnodes
+        layer.activation = activation
+        layer.λ = λ
         layer
     end
 end
 
 type HiddenLayer{T} <: Layer{T}
     nnodes::Int
-    input::Connection{T}
-    output::Connection{T}
+    input::Layer{T}
+    output::Layer{T}
     a::Matrix{T}
     δ::Matrix{T}
-    function HiddenLayer(nnodes)
+    activation::ActivationFun
+    Θ₀::DenseMatrix{T} #weights for bias term
+    Θ::DenseMatrix{T} #weights
+    Δ₀::DenseMatrix{T} #grad (after a backward pass) for bias term
+    Δ::DenseMatrix{T} #grads
+    λ::T
+    function HiddenLayer(nnodes, activation::ActivationFun, λ::T)
         layer=new()
-        layer.nnodes=nnodes
+        layer.nnodes = nnodes
+        layer.activation = activation
+        layer.λ = λ
         layer
     end
 end
