@@ -104,6 +104,9 @@ function train{T}(net::NNet{T}, x::DenseMatrix{T}, y::DenseMatrix{T}, x_val::Den
 
     start!(monitor)
 
+    valnet = deepcopy(net)
+    valnet.Θ = net.Θ
+
     while !done(monitor)
         train_cost = 0.0
         for (x, y) in mbs
@@ -112,7 +115,7 @@ function train{T}(net::NNet{T}, x::DenseMatrix{T}, y::DenseMatrix{T}, x_val::Den
             update!(opt, net.Θ, net.Δ)
         end
         train_cost /= mbs.nminibatches
-        update!(monitor, train_cost, cost(net, x_val, y_val, false), net.Θ)
+        update!(monitor, train_cost, cost(valnet, x_val, y_val, false), net.Θ)
     end
     (net, monitor)
 end
