@@ -3,21 +3,19 @@ using Docile
 @docstrings
 using Iterators, ArrayViews, NumericExtensions, NumericFuns
 
-export NNet, Layer, Connection
+export nnet, cost, predict, predict!
+export Sigmoid, SoftPlus, Linear, ReLU, Tanh, SoftSign
+export Advanced
 
-export Sigmoid, SoftPlus, Linear, ReLU, Tanh
+import Base.gradient
 
-export forward, backward
 
-export cost, gradient, gradient!
-
-export getΘ!, getΘ, getΔ!, setΘ!, initializeweights!
 
 include("types.jl")
 include("activations.jl") #defines acivation functions
 include("plumbing.jl") #implements some internals
 
-function NNet(layersizes::Vector{Int}, activations=[Sigmoid()]::Vector, λ=0.0, T=Float64)
+function nnet(layersizes::Vector{Int}, activations=[Sigmoid()]::Vector, λ=0.0, T=Float64)
     #check inputs
     length(layersizes) > 1 || error("layersizes should have length at least 2")
     if length(activations) == 1
@@ -45,7 +43,9 @@ function NNet(layersizes::Vector{Int}, activations=[Sigmoid()]::Vector, λ=0.0, 
     output = OutputLayer{T}(layersizes[end], lastactivation, λ)
     connect!(temp, output)
 
-    NNet{T}(input, output, λ)
+    net = NNet{T}(input, output, λ)
+    initializeweights!(net)
+    net
 end
 
 @doc """performs forward pass on input x""" ->
@@ -53,7 +53,7 @@ function forward(net::NNet, x::Matrix)
     p, n = size(x)
     net.input.nnodes == p || error("x and nnodes in the input layer do not match")
     net.input.a=x
-    allocate!(net, n)
+    allocate(net, n)
     for (in, output) in layerpairs(net)
         forward(in, output)
     end
@@ -76,6 +76,12 @@ function backward{T}(net::NNet{T}, y::DenseMatrix{T})
     map!(Subtract(), net.output.δ, net.output.a, y)
     for (output, input) in layerpairs(reverse(net))
         # backward(input, output)
+        ## for some reason if the contents of this loop are put into their own function
+        ## julia segfaults on the copy!(output.Δ, output.Θ) line
+        ## This seems to have to do with the views of Δ and Θ
+        ## Specifically, when passed to the loop body function, output.Δ seems to lose
+        ## the pointer of it's parent array. pointer(output.Δ) works... well it returns
+        ## a number at least, but pointer(output.Δ.arr) causes a segfault.
         n = size(output.δ, 2)
         mean!(output.Δ₀, output.δ, 2)
         copy!(output.Δ, output.Θ)
@@ -87,30 +93,8 @@ function backward{T}(net::NNet{T}, y::DenseMatrix{T})
     end
 end
 
-function calcderiv{T}(activation::ActivationFun, δ::DenseMatrix{T}, a::DenseMatrix{T})
-    @simd for i in 1:length(δ)
-        @inbounds δ[i] =  δ[i]* deriv(activation, a[i])
-    end
-end
-
-
-## this function causes a segfault, no idea why.
-## the code above is identical, just not in it's own function
-# function backward{T}(input::Layer{T}, output::Layer{T})
-#     con = connection(output, input)
-#     n = size(output.δ, 2)
-#     mean!(con.Δ₀, output.δ, 2)
-#     BLAS.gemm!('N', 'T', one(T)/n, output.δ, input.a, zero(T), con.Δ)
-#     if !isinput(input)
-#         At_mul_B!(input.δ, con.Θ, output.δ)
-#         @inbounds for i in 1:length(input.δ)
-#             input.δ[i] = input.δ[i] * deriv(con.activation, input.a[i])
-#         end
-#     end
-# end
-
-function cost{T}(net::NNet{T}, Θ::Vector{T}, x::DenseMatrix{T}, y::DenseMatrix{T}, penalty=true)
-    setΘ!(net, Θ)
+function cost_at{T}(net::NNet{T}, Θ::Vector{T}, x::DenseMatrix{T}, y::DenseMatrix{T}, penalty=true)
+    setweights!(net, Θ)
     forward(net, x)
     lastactivation = net.output.activation
     c = sumcost(lastactivation, net.output.a, y)/size(y,2)
@@ -125,19 +109,19 @@ function cost{T}(net::NNet{T}, Θ::Vector{T}, x::DenseMatrix{T}, y::DenseMatrix{
     isnan(c)? inf(T) : c
 end
 
-cost(net::NNet, x, y, penalty=true) = cost(net, net.Θ, x, y, penalty)
+cost(net::NNet, x, y, penalty=true) = cost_at(net, net.Θ, x, y, penalty)
 
-function gradient!{T}(net::NNet{T}, Δ::Vector{T}, Θ::Vector{T}, x::DenseMatrix{T}, y::DenseMatrix{T})
-    setΘ!(net, Θ)
+function gradient_at!{T}(net::NNet{T}, Δ::Vector{T}, Θ::Vector{T}, x::DenseMatrix{T}, y::DenseMatrix{T})
+    setweights!(net, Θ)
     forward(net, x)
     backward(net, y)
-    getΔ!(Δ, net)
+    getgradient!(Δ, net)
     Δ
 end
-gradient!(net::NNet, Δ::Vector, x::DenseMatrix, y::DenseMatrix) = gradient!(net, Δ, net.Θ, x, y)
+gradient!(net::NNet, Δ::Vector, x::DenseMatrix, y::DenseMatrix) = gradient_at!(net, Δ, net.Θ, x, y)
 gradient!(net::NNet, x::DenseMatrix, y::DenseMatrix) = gradient!(net, net.Δ, x, y)
-gradient(net::NNet, Θ::Vector, x::DenseMatrix, y::DenseMatrix) = gradient!(net, similar(Θ), x, y)
-gradient(net::NNet, x::DenseMatrix, y::DenseMatrix) = gradient(net, net.Θ, x, y)
+gradient_at(net::NNet, Θ::Vector, x::DenseMatrix, y::DenseMatrix) = gradient!(net, similar(Θ), x, y)
+gradient(net::NNet, x::DenseMatrix, y::DenseMatrix) = gradient_at(net, net.Θ, x, y)
 
 function predict!{T}(net::NNet{T}, p::DenseMatrix{T}, x::DenseMatrix{T})
     forward(net, x)
@@ -148,5 +132,7 @@ function predict{T}(net::NNet{T}, x::DenseMatrix{T})
     forward(net, x)
     copy(net.output.a)
 end
+
+include("advanced.jl")
 
 end # module

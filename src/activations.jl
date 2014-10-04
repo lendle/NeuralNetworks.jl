@@ -1,6 +1,5 @@
-
-
-init(::ActivationFun, fanin, fanout) = randn()/10.0
+#generic initializer because I don't know what I'm doing
+init(::ActivationFun, fanin, fanout) = randn()/100.0
 
 type Sigmoid <: ActivationFun end
 

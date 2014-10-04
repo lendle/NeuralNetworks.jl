@@ -14,27 +14,9 @@ abstract ActivationFun
 
 abstract Optimizer
 
-
-#abstract Part{T<:FloatingPoint}
-
 @doc """A Layer represents the nodes in the network
 and holds storage for the forward and backwards passes""" ->
 abstract Layer{T <: FloatingPoint} #<: Part{T}
-
-# @doc """A Connection defines the activation function between two Layers
-# and holds views to the weights and gradients.
-# """ ->
-# type Connection{T} <: Part{T}
-#     input::Layer
-#     output::Layer
-
-#     function Connection(activation::ActivationFun, λ::T)
-#         con=new()
-#         con.activation=activation
-#         con.λ = λ
-#         con
-#     end
-# end
 
 type InputLayer{T} <: Layer{T}
     nnodes::Int
@@ -58,11 +40,13 @@ type OutputLayer{T} <: Layer{T}
     Δ₀::DenseMatrix{T} #grad (after a backward pass) for bias term
     Δ::DenseMatrix{T} #grads
     λ::T
+    n::Int
     function OutputLayer(nnodes, activation::ActivationFun, λ::T)
         layer=new()
         layer.nnodes = nnodes
         layer.activation = activation
         layer.λ = λ
+        layer.n = 0
         layer
     end
 end
@@ -79,11 +63,13 @@ type HiddenLayer{T} <: Layer{T}
     Δ₀::DenseMatrix{T} #grad (after a backward pass) for bias term
     Δ::DenseMatrix{T} #grads
     λ::T
+    n::Int
     function HiddenLayer(nnodes, activation::ActivationFun, λ::T)
         layer=new()
         layer.nnodes = nnodes
         layer.activation = activation
         layer.λ = λ
+        layer.n = 0
         layer
     end
 end
