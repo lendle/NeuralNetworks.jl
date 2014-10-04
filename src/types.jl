@@ -21,7 +21,7 @@ abstract Layer{T <: FloatingPoint} #<: Part{T}
 type InputLayer{T} <: Layer{T}
     nnodes::Int
     output::Layer{T}
-    a::Matrix{T}
+    a::DenseMatrix{T}
     function InputLayer(nnodes)
         layer=new()
         layer.nnodes=nnodes
@@ -100,3 +100,5 @@ type NNet{T}
         net
     end
 end
+
+abstract AbstractSGD
