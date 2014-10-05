@@ -173,11 +173,7 @@ function activate!(layer::Layer)
     activate!(layer.activation, layer.a)
 end
 
-function activate!{T}(activation::ActivationFun, a::DenseMatrix{T})
-    @simd for i in 1:length(a)
-        @inbounds a[i] = value(activation, a[i])
-    end
-end
+#activate!(layer::Layer, a) is implemented in activations.jl
 
 
 ## some tight inner loop functions

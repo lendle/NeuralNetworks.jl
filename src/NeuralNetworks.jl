@@ -4,7 +4,7 @@ using Docile
 using Iterators, ArrayViews, NumericExtensions, NumericFuns, Reexport
 
 export nnet, cost, predict, predict!, train
-export Sigmoid, SoftPlus, Linear, ReLU, Tanh, SoftSign
+export Sigmoid, SoftPlus, Linear, ReLU, Tanh, SoftMax
 export Advanced
 import Base.gradient
 

@@ -93,7 +93,7 @@ function cost_at{T}(net::NNet{T}, Θ::Vector{T}, x::DenseMatrix{T}, y::DenseMatr
     isnan(c)? inf(T) : c
 end
 
-cost(net::NNet, x, y, penalty=true) = cost_at(net, net.Θ, x, y, penalty)
+cost(net::NNet, x::DenseMatrix, y::DenseMatrix, penalty=true) = cost_at(net, net.Θ, x, y, penalty)
 
 function gradient_at!{T}(net::NNet{T}, Δ::Vector{T}, Θ::Vector{T}, x::DenseMatrix{T}, y::DenseMatrix{T})
     setweights!(net, Θ)
