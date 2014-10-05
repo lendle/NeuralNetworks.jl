@@ -1,7 +1,7 @@
 module SGD
 import ..NeuralNetworks: AbstractSGD, update!
 
-export AbstractSGD, SimpleSGD, AdaDelta, AdaGrad, AveragedSGD, update!
+export AbstractSGD, SimpleSGD, AdaDelta, AdaGrad, AveragedSGD, RMSProp, update!
 
 #should implement a update! method:
 #update!(obj::AbstractSGD, weights::Vector{Float64}, gr::Vector{Float64})
@@ -21,6 +21,7 @@ type SimpleSGD{T} <: AbstractSGD{T}
         new(alpha1, alpha2, 0)
     end
 end
+SimpleSGD{T}(alpha1::T, alpha2::T) = SimpleSGD{T}(alpha1, alpha2)
 
 function update!{T}(obj::SimpleSGD{T}, weights::Vector{T}, gr::Vector{T})
     obj.t += 1
@@ -46,6 +47,7 @@ type AdaDelta{T} <: AbstractSGD{T}
         obj
     end
 end
+AdaDelta{T}(rho::T, eps::T) = AdaDelta{T}(rho, eps)
 
 Base.show(io::IO, obj::AdaDelta) = print(io, "AdaDelta(ρ=$(obj.rho), ε=$(obj.eps))")
 
@@ -80,7 +82,7 @@ type AdaGrad{T} <: AbstractSGD{T}
         obj
     end
 end
-
+AdaGrad{T}(eta::T) = AdaGrad{T}(eta)
 
 Base.show(io::IO, obj::AdaGrad) = print(io, "AdaGrad(η=$(obj.eta))")
 
@@ -90,15 +92,49 @@ function init!{T}(obj::AdaGrad{T}, weights::Vector{T})
     obj.initialized = true
 end
 
-function update!{T}(obj::AdaGrad, weights::Vector{T}, gr::Vector{T})
+function update!{T}(obj::AdaGrad{T}, weights::Vector{T}, gr::Vector{T})
     obj.initialized || init!(obj, weights)
     @simd for i in 1:length(obj.sqgr)
         @inbounds gri = gr[i]
         @inbounds obj.sqgr[i] += gri * gri
-        @inbounds weights[i] = obj.eta / sqrt(obj.sqgr[i]) * gr[i]
+        @inbounds weights[i] = weights[i] - obj.eta / sqrt(obj.sqgr[i]) * gr[i]
     end
     weights
 end
+
+type RMSProp{T} <: AbstractSGD{T}
+    α::T
+    γ::T
+    msgr::Vector{T}
+    initialized::Bool
+    function RMSProp(α::T, γ::T)
+        α > zero(T) || error("α should be positive")
+        γ >= zero(T) || error ("γ should be non-negative")
+        obj = new()
+        obj.α = α
+        obj.γ = γ
+        obj.initialized = false
+        obj
+    end
+end
+RMSProp{T}(α::T, γ::T) = RMSProp{T}(α, γ)
+
+function init!{T}(obj::RMSProp{T}, weights::Vector{T})
+    obj.initialized && error("already initialized")
+    obj.msgr = fill!(similar(weights), convert(T, 1.0e-8))
+    obj.initialized = true
+end
+
+function update!{T}(obj::RMSProp{T}, weights::Vector{T}, gr::Vector{T})
+    obj.initialized || init!(obj, weights)
+    @simd for i in 1:length(weights)
+        @inbounds gri = gr[i]
+        @inbounds obj.msgr[i] = obj.γ * obj.msgr[i] + (one(T) - γ) * gri * gri
+        @inbounds weights[i] = weights[i] - obj.α * gri / sqrt(obj.msgr[i])
+    end
+    weights
+end
+
 
 
 ## The averaged SGD needs the estimated gradient at different weights than those that
