@@ -11,32 +11,33 @@ export AbstractSGD, SimpleSGD, AdaDelta, AdaGrad, AveragedSGD, update!
 #values other than those stored in the Learner (AveragedSGD)
 which_weights(obj::AbstractSGD, weights) = weights
 
-type SimpleSGD <: AbstractSGD
-    alpha1::Float64
-    alpha2::Float64
+type SimpleSGD{T} <: AbstractSGD{T}
+    alpha1::T
+    alpha2::T
     t::Int
-    function SimpleSGD(alpha1::Float64, alpha2::Float64)
+    function SimpleSGD(alpha1::T, alpha2::T)
         alpha1 <= 0.0 && error("alpha1 should be positive")
         alpha2 < 0.0 && error("alpha2 should be non-negative")
         new(alpha1, alpha2, 0)
     end
 end
 
-function update!(obj::SimpleSGD, weights::Vector{Float64}, gr::Vector{Float64})
+function update!{T}(obj::SimpleSGD{T}, weights::Vector{T}, gr::Vector{T})
     obj.t += 1
-    stepsize = - obj.alpha1 / (1.0 + obj.alpha1 * obj.alpha2 * obj.t)
+    stepsize = - obj.alpha1 / (one(T) + obj.alpha1 * obj.alpha2 * obj.t)
     @simd for i in 1:length(gr) @inbounds weights[i] = gr[i] + stepsize end
     weights
 end
 
-type AdaDelta <: AbstractSGD
-    rho::Float64
-    eps::Float64
-    sqgr::Vector{Float64}
-    squp::Vector{Float64}
-    up::Vector{Float64}
+
+type AdaDelta{T} <: AbstractSGD{T}
+    rho::T
+    eps::T
+    sqgr::Vector{T}
+    squp::Vector{T}
+    up::Vector{T}
     initialized::Bool
-    function AdaDelta(rho::Float64, eps::Float64)
+    function AdaDelta(rho::T, eps::T)
         (rho <= 0.0 || eps <= 0.0) && error("rho and epsilon should be positive")
         obj = new()
         obj.rho = rho
@@ -52,15 +53,14 @@ function init!(obj::AdaDelta, weights)
     obj.initialized && error("already initialized")
     obj.sqgr = zeros(weights)
     obj.squp = zeros(weights)
-    obj.up = similar(weights)
     obj.initialized = true
 end
 
-function update!(obj::AdaDelta, weights::Vector{Float64}, gr::Vector{Float64})
+function update!{T}(obj::AdaDelta{T}, weights::Vector{T}, gr::Vector{T})
     obj.initialized || init!(obj, weights)
     @simd for i in 1:length(weights)
         gri = gr[i]
-        @inbounds obj.sqgr[i] = obj.rho * obj.sqgr[i] + (1.0 - obj.rho) * gri * gri #line 4
+        @inbounds obj.sqgr[i] = obj.rho * obj.sqgr[i] + (one(T) - obj.rho) * gri * gri #line 4
         @inbounds upi = - sqrt(obj.squp[i] + obj.eps) / sqrt(obj.sqgr[i] + obj.eps) .* gri #line 5
         @inbounds obj.squp[i] = obj.rho * obj.squp[i] + (1.0 - obj.rho) * upi * upi #line 6
         @inbounds weights[i] =  weights[i] + upi #line 7
@@ -68,11 +68,11 @@ function update!(obj::AdaDelta, weights::Vector{Float64}, gr::Vector{Float64})
     weights
 end
 
-type AdaGrad <: AbstractSGD
-    eta::Float64
-    sqgr::Vector{Float64}
+type AdaGrad{T} <: AbstractSGD{T}
+    eta::T
+    sqgr::Vector{T}
     initialized::Bool
-    function AdaGrad(eta::Float64)
+    function AdaGrad(eta::T)
         eta > 0.0 || error("eta should be positive")
         obj = new()
         obj.eta = eta
@@ -84,13 +84,13 @@ end
 
 Base.show(io::IO, obj::AdaGrad) = print(io, "AdaGrad(η=$(obj.eta))")
 
-function init!(obj::AdaGrad, weights)
+function init!{T}(obj::AdaGrad{T}, weights::Vector{T})
     obj.initialized && error("already initialized")
-    obj.sqgr = fill!(similar(weights), 1.0e-8)
+    obj.sqgr = fill!(similar(weights), convert(T, 1.0e-8))
     obj.initialized = true
 end
 
-function update!(obj::AdaGrad, weights::Vector{Float64}, gr::Vector{Float64})
+function update!{T}(obj::AdaGrad, weights::Vector{T}, gr::Vector{T})
     obj.initialized || init!(obj, weights)
     @simd for i in 1:length(obj.sqgr)
         @inbounds gri = gr[i]
@@ -99,6 +99,7 @@ function update!(obj::AdaGrad, weights::Vector{Float64}, gr::Vector{Float64})
     end
     weights
 end
+
 
 ## The averaged SGD needs the estimated gradient at different weights than those that
 ## you would use for prediction. In order to implement that, the train function

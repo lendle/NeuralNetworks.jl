@@ -117,5 +117,6 @@ function train{T}(net::NNet{T}, x::DenseMatrix{T}, y::DenseMatrix{T}, x_val::Den
         train_cost /= mbs.nminibatches
         update!(monitor, train_cost, cost(valnet, x_val, y_val, false), net.Θ)
     end
+    copy!(net.Θ, monitor.bestΘ)
     (net, monitor)
 end

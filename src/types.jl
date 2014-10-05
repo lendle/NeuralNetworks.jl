@@ -12,8 +12,6 @@ I hope this is a reasonable thing to do...
 """ ->
 abstract ActivationFun
 
-abstract Optimizer
-
 @doc """A Layer represents the nodes in the network
 and holds storage for the forward and backwards passes""" ->
 abstract Layer{T <: FloatingPoint} #<: Part{T}
@@ -101,4 +99,4 @@ type NNet{T}
     end
 end
 
-abstract AbstractSGD
+abstract AbstractSGD{T <: FloatingPoint}
